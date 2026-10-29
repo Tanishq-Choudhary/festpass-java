@@ -1,6 +1,9 @@
 # FestPass: campus event registration + Jenkins
 
-This is a deliberately failing **diagnostic starter**, not a finished submission. It manages
+Status: the cancel bug is fixed and all 28 tests pass. See [My submission](#my-submission)
+at the end of this file for what was done and where the evidence is.
+
+The starter below was a deliberately failing **diagnostic starter**, not a finished submission. It manages
 multiple events, seat limits, student registrations, cancellations, and local
 file persistence. For the **one-hour Jenkins assessment**, create the SCM job,
 add the missing polling trigger, investigate test failures, and demonstrate
@@ -145,3 +148,57 @@ test cases must be registered in the `FestPassTest` runner.
 `java ci/Build.java package` packages without tests; Jenkins runs it only after
 the Test stage succeeds. `verify` tests and packages locally. Run the separate
 smoke command after `verify` to validate the actual JAR.
+
+## My submission
+
+Author: Tanishq Choudhary. Job: `festpass-ci` (Pipeline script from SCM,
+`git://127.0.0.1:9418/festpass-java`, branch `*/main`, agent `student-laptop`).
+
+### What I did
+
+1. Set up Jenkins 2.580.1, the Git server and the `student-laptop` agent on my laptop.
+2. Filled in `submission.properties` and added `triggers { pollSCM('* * * * *') }` to the Jenkinsfile.
+3. Ran Build Now once to load the trigger. It failed at the Test stage, as expected.
+4. Changed the help intro line to include my name and committed. Polling started the next build, which failed the same way.
+5. Read the failing tests, found the bug, fixed it, committed. Polling started a green build.
+
+| Build | Started by | Commit | Result |
+|---|---|---|---|
+| 1 | user, once | dd3304c | FAILURE, 3 of 28 tests failed |
+| 2 | SCM change | a37b54c | FAILURE, same 3 tests |
+| 3 | SCM change | 7a7f3e1 | SUCCESS, 28 passed, JAR built |
+
+### The bug
+
+`cancel()` in `BookingService.java` checked that the booking existed but never removed
+the student, so the seat stayed taken and the cancellation was lost after reload.
+The fix is one line at the end of `cancel()`: `event.students.remove(studentId);`.
+Tests, pipeline stages and other files were not changed, apart from the polling trigger.
+
+### Where the evidence is
+
+The `submission` folder holds `EVIDENCE.md`, the evidence CSV for each build
+(`build1-red`, `build2-red`, `build3-green`) and the final `festpass.jar`.
+
+### How to check the codes and the evidence
+
+- The two codes are in `submission.properties` as `class.code` and `challenge.code`.
+  `ci/BuildEvidence.java` accepts 3 to 64 letters, digits, `_` or `-` and rejects the
+  `_REQUIRED` placeholders, so a build with a bad code fails at Submission setup.
+- Each evidence CSV repeats them in the `ClassCode` and `ChallengeCode` columns.
+- The `StudentAlias` column comes from the commit author. Check it with `git log -1 --format=%an`.
+- The `Commit` column should match the commit Jenkins built. For build 3 that is
+  `7a7f3e1097d6bb9c096017de8f9477aaa479fb11`; compare with `git log --format=%H`.
+- The `JarSha256` column in `build3-green/submission-evidence.csv` should equal the hash of the JAR:
+
+```text
+Get-FileHash submission/build3-green/festpass.jar -Algorithm SHA256
+```
+
+- Run the JAR to see the personalized help line:
+
+```text
+java -jar submission/build3-green/festpass.jar help
+```
+
+To rerun everything locally: `java ci/Build.java verify`, then `java ci/SmokeTest.java`.
