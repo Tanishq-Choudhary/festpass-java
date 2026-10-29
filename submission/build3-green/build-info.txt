@@ -1,0 +1,2 @@
+Application: FestPass
+Build Java: 21.0.11+10-LTS
